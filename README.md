@@ -1,6 +1,6 @@
 # Instant Mess'nger
 
-Actually instant messaging. Everyone in a room types into one shared line at the same time, and nothing is ever saved.
+Actually instant messaging. Everyone in a room types into one shared bubble at the same time, and nothing is ever saved. There's no text box: you just type and it lands in the bubble.
 
 **Try it:** [kealjones.com/instant-messnger](https://kealjones.com/instant-messnger/)
 
@@ -11,6 +11,14 @@ Actually instant messaging. Everyone in a room types into one shared line at the
 - **5 seconds of quiet locks the line.** The next keystroke wipes it and starts a new one, and everyone's backspaces reset to zero.
 - **Nothing is stored.** No history, no logs, no database. If you weren't connected, you missed it.
 - **Limits so nobody's phone melts:** 300 characters per burst, 4,000 per line (overflowing it starts a new line), 20 messages per second per person.
+
+## Accessibility and languages
+
+- Light and dark themes (follows the system, or pick one with the toggle). Every text color passes WCAG AA contrast in both.
+- Fully usable by keyboard, with visible focus. Screen readers get the finished bubble read out once when it locks (not every keystroke), plus who joined and left.
+- Struck-out letters use real `<del>` markup, and motion respects "reduce motion". Windows high contrast mode is supported.
+- Typing goes through a hidden input, so phone keyboards, dictation and IMEs (Japanese, Chinese, Korean, accent dead keys) all work. Emoji and accented letters count as one letter each.
+- Right-to-left text lines up correctly. UI strings live in `site/src/i18n.ts` (English and Spanish so far), picked from the browser language or `?lang=`.
 
 ## How it's built
 

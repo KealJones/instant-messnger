@@ -64,6 +64,11 @@ describe("RoomState", () => {
     expect(r.braid).toBeGreaterThan(a.braid);
   });
 
+  it("counts emoji and accents as one letter each", () => {
+    const r = new RoomState();
+    expect(r.burst("a", "👨‍👩‍👧é", 0)!.left).toBe(2);
+  });
+
   it("cleans screen names", () => {
     expect(cleanName("  ")).toBe("anon");
     expect(cleanName("x".repeat(40))).toHaveLength(LIMITS.nameMax);

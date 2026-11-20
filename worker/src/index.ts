@@ -66,7 +66,7 @@ export class Room extends DurableObject<Env> {
   }
 
   async webSocketMessage(ws: WebSocket, data: string | ArrayBuffer) {
-    if (typeof data !== "string" || data.length > 4096) return;
+    if (typeof data !== "string" || data.length > 16_384) return;
     let msg: { t?: unknown; text?: unknown };
     try {
       msg = JSON.parse(data);

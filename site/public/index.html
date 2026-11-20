@@ -2,74 +2,51 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="color-scheme" content="light dark" />
     <title>Instant Mess'nger</title>
-    <meta name="description" content="Actually instant messaging. Everyone types at once, nothing is saved, you had to be there." />
+    <meta name="description" content="Everyone types into one bubble at once. Nothing is saved." />
     <link rel="stylesheet" href="style.css" />
+    <script>try{var t=localStorage.getItem("im:theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
   </head>
   <body>
-    <main class="desktop">
-      <section class="win" id="signon" aria-labelledby="signon-title">
-        <header class="titlebar">
-          <span id="signon-title">Sign On</span>
-          <span class="winbtns" aria-hidden="true"><i>_</i><i>□</i><i>×</i></span>
-        </header>
-        <div class="winbody">
-          <h1 class="logo">Instant Mess<span class="apos">'</span>nger</h1>
-          <p class="tagline">Actually instant. Nothing saved. You had to be there.</p>
-          <form id="signon-form" class="form">
-            <label>Screen name
-              <input id="name" maxlength="24" required autocomplete="nickname" autocapitalize="off" spellcheck="false" />
-            </label>
-            <label>Room
-              <input id="room" maxlength="40" required autocapitalize="off" spellcheck="false" />
-            </label>
-            <button type="submit" class="btn">Sign On</button>
-          </form>
-          <details class="rules">
-            <summary>How this works</summary>
-            <ul>
-              <li>Everyone in the room types into one shared line. Letters land in the order they arrive.</li>
-              <li>Each letter you type earns you one backspace. A backspace crosses out the newest letter in the line, whoever typed it.</li>
-              <li>After 5 seconds of nobody typing, the line locks. The next keystroke wipes it and starts a new one. Backspaces reset.</li>
-              <li>Nothing is stored. If you weren't here, you missed it.</li>
-            </ul>
-          </details>
-        </div>
+    <main id="join" class="join" hidden>
+      <h1 class="sr-only">Instant Mess'nger</h1>
+      <form id="join-form" class="join-form">
+      <label for="name" class="sr-only" id="name-label">your name</label>
+      <input id="name" maxlength="24" required autocomplete="nickname" autocapitalize="off" spellcheck="false" />
+      <button type="submit" id="join-btn" aria-label="Join">→</button>
+      </form>
+    </main>
+
+    <main id="app" class="app" hidden>
+      <h1 class="sr-only">Instant Mess'nger</h1>
+      <header class="top">
+        <button id="room" class="room" type="button"></button>
+        <span id="conn" class="conn" role="img"></span>
+        <button id="theme" class="theme" type="button"></button>
+      </header>
+
+      <section class="stage">
+        <div id="bubble" class="bubble empty" dir="auto"><span id="text"></span><span class="caret" aria-hidden="true"></span></div>
       </section>
 
-      <section class="win chatwin" id="chat" hidden aria-labelledby="title">
-        <header class="titlebar">
-          <span id="title">Instant Mess'nger</span>
-          <span class="winbtns" aria-hidden="true"><i>_</i><i>□</i><i>×</i></span>
-        </header>
-        <nav class="toolbar">
-          <button type="button" class="btn" id="invite">Invite</button>
-          <button type="button" class="btn" id="signoff">Sign Off</button>
-        </nav>
-        <div class="panes">
-          <aside class="buddies">
-            <h2>Buddies <span id="count"></span></h2>
-            <ul id="buddies"></ul>
-          </aside>
-          <div class="talk">
-            <div class="who" id="who">Nobody's talking</div>
-            <div class="braid empty" id="braid"></div>
-            <input
-              id="type"
-              class="type"
-              aria-label="Type here. Everyone sees it as you go."
-              placeholder="Type. Everyone sees it as you go."
-              autocomplete="off"
-              autocorrect="off"
-              autocapitalize="off"
-              spellcheck="false"
-              enterkeyhint="send"
-            />
-          </div>
-        </div>
-        <footer class="statusbar" id="status" role="status">Dialing in…</footer>
-      </section>
+      <footer class="bottom">
+        <ul id="people" class="people"></ul>
+      </footer>
+
+      <input
+        id="type"
+        class="capture"
+        aria-describedby="rules"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        enterkeyhint="send"
+      />
+      <p id="rules" class="sr-only"></p>
+      <div id="announce" class="sr-only" role="status" aria-live="polite"></div>
     </main>
     <script type="module" src="app.js"></script>
   </body>

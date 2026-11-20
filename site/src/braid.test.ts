@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyEvent, toSpans, type BraidEvent, type Letter } from "./braid";
+import { applyEvent, standingText, toSpans, type BraidEvent, type Letter } from "./braid";
 
 const run = (events: BraidEvent[]) => {
   const letters: Letter[] = [];
@@ -37,10 +37,10 @@ describe("braid", () => {
     ]);
   });
 
-  it("counts emoji as one letter", () => {
-    const letters = run([{ t: "burst", from: "a", text: "👋x" }, { t: "del", from: "a" }]);
-    expect(letters).toHaveLength(2);
-    expect(letters[0]).toEqual({ from: "a", c: "👋", struckBy: null });
+  it("treats emoji sequences and accented letters as one letter", () => {
+    const letters = run([{ t: "burst", from: "a", text: "👨‍👩‍👧e\u0301x" }, { t: "del", from: "a" }]);
+    expect(letters.map((l) => l.c)).toEqual(["👨‍👩‍👧", "e\u0301", "x"]);
+    expect(standingText(letters)).toBe("👨‍👩‍👧e\u0301");
   });
 
   it("ignores backspaces when everything is already struck", () => {

@@ -1,12 +1,13 @@
-import { applyEvent, toSpans, type Letter } from "./braid";
+import { applyEvent, graphemes, standingText, toSpans, type Letter } from "./braid";
+import { joinNames, lang, pluralOf, t } from "./i18n";
 
 declare const __RELAY__: string;
 
-const LOCK_MS = 5000; // matches the relay: 5s of quiet locks the braid
+const LOCK_MS = 5000; // matches the relay: 5s of quiet locks the bubble
 const FLUSH_MS = 250; // send typed letters after this much of a pause (or on a space)
 const BURST_MAX = 300;
 const COLORS = 6;
-const S = "​"; // sentinel kept in the input so backspace always fires, even on mobile
+const S = "​"; // sentinel kept in the hidden input so backspace always fires, even on phones
 
 type Person = { id: string; name: string };
 type ServerMsg =
@@ -20,17 +21,29 @@ const params = new URLSearchParams(location.search);
 const RELAY = (params.get("relay") || __RELAY__).replace(/\/+$/, "");
 
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-const signon = el("signon");
-const chat = el("chat");
+const joinView = el("join");
+const joinForm = el<HTMLFormElement>("join-form");
 const nameInput = el<HTMLInputElement>("name");
-const roomInput = el<HTMLInputElement>("room");
-const braidEl = el("braid");
-const whoEl = el("who");
+const app = el("app");
+const roomBtn = el("room");
+const connDot = el("conn");
+const themeBtn = el("theme");
+const bubble = el("bubble");
+const textEl = el("text");
+const peopleEl = el("people");
 const typeEl = el<HTMLInputElement>("type");
-const buddiesEl = el("buddies");
-const countEl = el("count");
-const statusEl = el("status");
-const titleEl = el("title");
+const announceEl = el("announce");
+
+// ---- localized static text ----
+document.documentElement.lang = lang;
+el("name-label").textContent = t.yourName;
+nameInput.placeholder = t.yourName;
+el("join-btn").ariaLabel = t.join;
+roomBtn.title = t.copyInvite;
+peopleEl.ariaLabel = t.people;
+typeEl.ariaLabel = t.typeLabel;
+el("rules").textContent = t.rules;
+bubble.style.setProperty("--placeholder", JSON.stringify(t.typeAnything));
 
 const store = {
   get: (k: string) => {
@@ -40,9 +53,10 @@ const store = {
       return null;
     }
   },
-  set: (k: string, v: string) => {
+  set: (k: string, v: string | null) => {
     try {
-      localStorage.setItem(k, v);
+      if (v === null) localStorage.removeItem(k);
+      else localStorage.setItem(k, v);
     } catch {
       /* private mode etc. */
     }
@@ -63,70 +77,106 @@ function colorOf(id: string): number {
 }
 
 // ---- state ----
+const room = cleanRoom(params.get("r") ?? "") || randomRoom();
+let screenName = store.get("im:name") ?? "";
 let ws: WebSocket | null = null;
-let wantOpen = false;
 let retry = 0;
-let room = "";
-let screenName = "";
 let me = "";
 const people = new Map<string, { name: string; left: number }>();
 let braidId: number | null = null;
 let letters: Letter[] = [];
 let pending = "";
+let composing = false;
 let flushTimer: number | undefined;
 let lockTimer: number | undefined;
 
-// ---- sign on ----
-nameInput.value = store.get("im:name") ?? "";
-roomInput.value = cleanRoom(params.get("r") ?? "") || randomRoom();
-
-el<HTMLFormElement>("signon-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  screenName = nameInput.value.trim().slice(0, 24) || "anon";
-  room = cleanRoom(roomInput.value) || randomRoom();
-  store.set("im:name", screenName);
+{
   const url = new URL(location.href);
   url.searchParams.set("r", room);
   history.replaceState(null, "", url);
-  signon.hidden = true;
-  chat.hidden = false;
-  titleEl.textContent = `${screenName} in #${room}`;
-  document.title = `#${room} – Instant Mess'nger`;
-  wantOpen = true;
-  connect();
-  resetInput();
-  typeEl.focus();
+  roomBtn.textContent = `#${room}`;
+  document.title = `#${room}`;
+}
+
+function announce(msg: string) {
+  announceEl.textContent = "";
+  // a fresh text node makes screen readers read it even if it repeats
+  requestAnimationFrame(() => (announceEl.textContent = msg));
+}
+
+// ---- theme: auto (follows the system) → light → dark ----
+const THEMES = ["auto", "light", "dark"] as const;
+type Theme = (typeof THEMES)[number];
+const ICON = (inner: string) =>
+  `<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5">${inner}</svg>`;
+const THEME_ICON: Record<Theme, string> = {
+  auto: ICON('<circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor" stroke="none"/>'),
+  light: ICON('<circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6 13 13M3 13l1.4-1.4M11.6 4.4 13 3"/>'),
+  dark: ICON('<path d="M13 9.5A5.5 5.5 0 1 1 6.5 3 4.5 4.5 0 0 0 13 9.5z" fill="currentColor" stroke="none"/>'),
+};
+function applyTheme(th: Theme) {
+  if (th === "auto") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = th;
+  themeBtn.innerHTML = THEME_ICON[th];
+  themeBtn.title = themeBtn.ariaLabel = t.theme[th];
+}
+let theme: Theme = (THEMES as readonly string[]).includes(store.get("im:theme") ?? "") ? (store.get("im:theme") as Theme) : "auto";
+applyTheme(theme);
+themeBtn.addEventListener("click", () => {
+  theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
+  store.set("im:theme", theme === "auto" ? null : theme);
+  applyTheme(theme);
 });
 
-el("signoff").addEventListener("click", () => {
-  wantOpen = false;
+// ---- joining ----
+function showJoin() {
   ws?.close();
   ws = null;
-  people.clear();
-  clearBraid();
-  chat.hidden = true;
-  signon.hidden = false;
+  app.hidden = true;
+  joinView.hidden = false;
+  nameInput.value = screenName;
+  nameInput.focus();
+}
+
+function enter() {
+  joinView.hidden = true;
+  app.hidden = false;
+  connect();
+  focusTyping();
+}
+
+joinForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  screenName = graphemes(nameInput.value.trim()).slice(0, 24).join("");
+  if (!screenName) return;
+  store.set("im:name", screenName);
+  enter();
 });
 
-el("invite").addEventListener("click", async () => {
-  const url = new URL(location.href);
-  url.searchParams.set("r", room);
+roomBtn.addEventListener("click", async () => {
   try {
-    await navigator.clipboard.writeText(url.toString());
-    setStatus("Invite link copied. Paste it to your buddies.");
+    await navigator.clipboard.writeText(location.href);
+    roomBtn.textContent = t.linkCopied;
+    announce(t.linkCopied);
   } catch {
-    setStatus(url.toString());
+    roomBtn.textContent = location.href;
   }
+  setTimeout(() => (roomBtn.textContent = `#${room}`), 1400);
 });
 
 // ---- connection ----
+function setConnected(on: boolean) {
+  connDot.classList.toggle("on", on);
+  connDot.ariaLabel = on ? t.connected : t.reconnecting;
+}
+
 function connect() {
-  setStatus("Dialing in…");
   const sock = new WebSocket(`${RELAY}/room/${room}?name=${encodeURIComponent(screenName)}`);
   ws = sock;
+  setConnected(false);
   sock.onopen = () => {
     retry = 0;
-    setStatus("Signed on. Nothing you type is saved anywhere.");
+    setConnected(true);
   };
   sock.onmessage = (e) => {
     try {
@@ -138,12 +188,11 @@ function connect() {
   sock.onclose = () => {
     if (ws !== sock) return;
     ws = null;
+    setConnected(false);
     people.clear();
-    renderBuddies();
-    if (!wantOpen) return;
+    renderPeople();
     const wait = Math.min(10_000, 500 * 2 ** retry++);
-    setStatus("Lost the string. Reconnecting…");
-    setTimeout(() => wantOpen && !ws && connect(), wait);
+    setTimeout(() => !ws && !app.hidden && connect(), wait);
   };
 }
 
@@ -155,20 +204,21 @@ function handle(m: ServerMsg) {
   switch (m.t) {
     case "welcome":
       me = m.you;
+      app.style.setProperty("--me", `var(--c${colorOf(me)})`);
       people.clear();
       for (const p of m.people) people.set(p.id, { name: p.name, left: 0 });
-      renderBuddies();
+      renderPeople();
       return;
     case "join":
       people.set(m.id, { name: m.name, left: 0 });
-      setStatus(`${m.name} walked in.`);
-      renderBuddies();
+      announce(t.joined(m.name));
+      renderPeople();
       return;
     case "leave": {
       const p = people.get(m.id);
       people.delete(m.id);
-      if (p) setStatus(`${p.name} left. They missed everything.`);
-      renderBuddies();
+      if (p) announce(t.left(p.name));
+      renderPeople();
       return;
     }
     case "burst":
@@ -177,13 +227,16 @@ function handle(m: ServerMsg) {
         braidId = m.braid;
         letters = [];
         for (const p of people.values()) p.left = 0;
+        bubble.classList.remove("pop");
+        void bubble.offsetWidth; // restart the pop animation
+        bubble.classList.add("pop");
       }
       applyEvent(letters, m);
       const p = people.get(m.from);
       if (p) p.left = m.left;
       armLock();
-      renderBraid();
-      renderBuddies();
+      renderText();
+      renderPeople();
       return;
     }
   }
@@ -191,61 +244,92 @@ function handle(m: ServerMsg) {
 
 function armLock() {
   clearTimeout(lockTimer);
-  braidEl.classList.remove("locked");
+  bubble.classList.remove("locked");
   lockTimer = window.setTimeout(() => {
-    braidEl.classList.add("locked");
+    bubble.classList.add("locked");
     for (const p of people.values()) p.left = 0;
-    renderBuddies();
+    renderPeople();
+    // screen readers get the finished bubble once, not every keystroke
+    const text = standingText(letters);
+    if (text) {
+      const names = [...new Set(letters.filter((l) => !l.struckBy).map((l) => l.from))].map(
+        (id) => people.get(id)?.name ?? t.someone,
+      );
+      announce(t.said(joinNames(names), text));
+    }
   }, LOCK_MS);
 }
 
-function clearBraid() {
-  braidId = null;
-  letters = [];
-  pending = "";
-  clearTimeout(lockTimer);
-  braidEl.classList.remove("locked");
-  renderBraid();
-}
-
-// ---- typing ----
-function resetInput() {
+// ---- typing (straight into the bubble via a hidden input) ----
+function resetCapture() {
   typeEl.value = S;
   typeEl.setSelectionRange(1, 1);
 }
+function focusTyping() {
+  if (document.activeElement !== typeEl) typeEl.focus({ preventScroll: true });
+  if (!composing) resetCapture();
+}
 
+const isControl = (target: EventTarget | null) => !!(target as HTMLElement | null)?.closest("button");
+app.addEventListener("pointerdown", (e) => {
+  if (isControl(e.target)) return;
+  e.preventDefault(); // keep the hidden input focused
+  focusTyping();
+});
+app.addEventListener("click", (e) => {
+  // iOS only opens the keyboard from a click/tap handler
+  if (!isControl(e.target) && document.activeElement !== typeEl) focusTyping();
+});
+document.addEventListener("keydown", (e) => {
+  if (app.hidden || document.activeElement === typeEl || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (document.activeElement?.closest("button") && (e.key === "Enter" || e.key === " ")) return;
+  if (e.key.length === 1 || e.key === "Backspace") focusTyping();
+});
+typeEl.addEventListener("focus", () => app.classList.add("focused"));
+typeEl.addEventListener("blur", () => app.classList.remove("focused"));
 typeEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter") e.preventDefault();
 });
-typeEl.addEventListener("focus", resetInput);
-typeEl.addEventListener("input", () => {
+
+// IME (Japanese, Chinese, Korean, dead keys for accents): wait for the finished text
+typeEl.addEventListener("compositionstart", () => (composing = true));
+typeEl.addEventListener("compositionend", () => {
+  composing = false;
+  setTimeout(readCapture, 0);
+});
+typeEl.addEventListener("input", (e) => {
+  if (composing || (e as InputEvent).isComposing) return;
+  readCapture();
+});
+
+function readCapture() {
   const v = typeEl.value;
   const added = v.split(S).join("");
   if (!v.includes(S)) backspace();
-  const n = Array.from(added).length;
+  const n = graphemes(added).length;
   if (n > 1) {
-    // pasted or autocorrected: send it as one burst
+    // pasted, autocorrected or composed: send it as one burst
     pending += added;
     flush();
   } else if (n === 1) {
     typeChar(added);
   }
-  resetInput();
-});
+  resetCapture();
+}
 
 function typeChar(c: string) {
   pending += c;
   clearTimeout(flushTimer);
-  if (c === " " || Array.from(pending).length >= BURST_MAX) flush();
+  if (/\s/.test(c) || graphemes(pending).length >= BURST_MAX) flush();
   else flushTimer = window.setTimeout(flush, FLUSH_MS);
-  renderBraid();
+  renderText();
 }
 
 function backspace() {
   if (pending) {
     // not sent yet: nobody saw it, delete for free
-    pending = Array.from(pending).slice(0, -1).join("");
-    renderBraid();
+    pending = graphemes(pending).slice(0, -1).join("");
+    renderText();
     return;
   }
   send({ t: "del" });
@@ -256,53 +340,59 @@ function flush() {
   if (!pending) return;
   send({ t: "burst", text: pending });
   pending = "";
-  renderBraid();
+  renderText();
 }
 
 // ---- rendering ----
-function setStatus(s: string) {
-  statusEl.textContent = s;
+function node(tag: string, text: string, cls: string) {
+  const n = document.createElement(tag);
+  n.className = cls;
+  n.textContent = text;
+  return n;
 }
 
-function span(text: string, cls: string, strikeColor?: number) {
-  const s = document.createElement("span");
-  s.className = cls;
-  s.textContent = text;
-  if (strikeColor !== undefined) s.style.setProperty("--strike", `var(--c${strikeColor})`);
-  return s;
-}
-
-function renderBraid() {
+function renderText() {
   const frag = document.createDocumentFragment();
   for (const s of toSpans(letters)) {
-    const struck = s.struckBy !== null;
-    frag.append(span(s.text, `c${colorOf(s.from)}${struck ? " struck" : ""}`, struck ? colorOf(s.struckBy!) : undefined));
+    if (s.struckBy === null) {
+      frag.append(node("span", s.text, `c${colorOf(s.from)}`));
+    } else {
+      const d = node("del", s.text, `c${colorOf(s.from)}`);
+      d.style.setProperty("--strike", `var(--c${colorOf(s.struckBy)})`);
+      frag.append(d);
+    }
   }
-  if (pending) frag.append(span(pending, `c${colorOf(me)} pending`));
-  braidEl.replaceChildren(frag);
-  braidEl.classList.toggle("empty", letters.length === 0 && !pending);
-
-  const authors = [...new Set(letters.map((l) => l.from))].map((id) => people.get(id)?.name ?? "someone");
-  whoEl.textContent =
-    authors.length === 0
-      ? "Nobody's talking"
-      : authors.length === 1
-        ? authors[0]
-        : `${authors.join(" + ")} (talking over each other)`;
+  if (pending) frag.append(node("span", pending, `c${colorOf(me)} pending`));
+  textEl.replaceChildren(frag);
+  bubble.classList.toggle("empty", letters.length === 0 && !pending);
+  bubble.scrollTop = bubble.scrollHeight;
 }
 
-function renderBuddies() {
+function renderPeople() {
   const frag = document.createDocumentFragment();
   for (const [id, p] of people) {
     const li = document.createElement("li");
-    li.append(span("", `dot c${colorOf(id)}`), span(p.name + (id === me ? " (you)" : ""), `name c${colorOf(id)}`));
-    const left = span(`⌫ ${p.left}`, "left");
-    left.title = "Backspaces left in this braid";
-    li.append(left);
+    const color = `c${colorOf(id)}`;
+    let name: HTMLElement;
+    if (id === me) {
+      name = node("button", p.name, `${color} name me`);
+      (name as HTMLButtonElement).type = "button";
+      name.ariaLabel = t.changeName(p.name);
+      name.addEventListener("click", showJoin);
+    } else {
+      name = node("span", p.name, `${color} name`);
+    }
+    li.append(name);
+    if (p.left > 0) {
+      const left = node("span", String(p.left), "left");
+      left.ariaLabel = left.title = t.backspaces(p.left, pluralOf(p.left));
+      li.append(left);
+    }
     frag.append(li);
   }
-  buddiesEl.replaceChildren(frag);
-  countEl.textContent = `(${people.size})`;
+  peopleEl.replaceChildren(frag);
 }
 
-renderBraid();
+renderText();
+if (screenName) enter();
+else showJoin();

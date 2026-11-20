@@ -17,13 +17,16 @@ export type BurstEvent = { t: "burst"; from: string; text: string; braid: number
 export type DelEvent = { t: "del"; from: string; braid: number; left: number };
 export type RoomEvent = BurstEvent | DelEvent;
 
-/** Count characters the way people see them (code points, not UTF-16 units). */
-export const charCount = (s: string) => Array.from(s).length;
+const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/** Split into characters the way people see them (graphemes: 👨‍👩‍👧 and é are one each). */
+export const graphemes = (s: string): string[] => Array.from(segmenter.segment(s), (x) => x.segment);
+export const charCount = (s: string) => graphemes(s).length;
 
 /** Collapse whitespace/control chars to single spaces and cap length. */
 export function cleanText(raw: string, max: number = LIMITS.burstMax): string {
   const flat = raw.replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ");
-  return Array.from(flat).slice(0, max).join("");
+  return graphemes(flat).slice(0, max).join("");
 }
 
 export function cleanName(raw: string | null | undefined): string {
