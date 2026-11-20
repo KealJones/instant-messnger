@@ -1,0 +1,48 @@
+name: PR preview
+
+# Each PR gets a page at kealjones.com/instant-messnger/pr-preview/pr-N/ that talks to that
+# branch's Worker Preview (built by Cloudflare's Git integration), so testing never touches real rooms.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - if: github.event.action != 'closed'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - if: github.event.action != 'closed'
+        run: npm ci && npm run typecheck && npm test
+
+      - name: Point the page at this branch's Worker Preview
+        if: github.event.action != 'closed'
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          name=$(printf '%s' "$BRANCH" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
+          echo "RELAY_URL=wss://${name}-instant-messnger.kealjones.workers.dev" >> "$GITHUB_ENV"
+
+      - if: github.event.action != 'closed'
+        run: npm run build:site
+
+      - uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: site/dist
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview

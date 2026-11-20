@@ -1,0 +1,22 @@
+{
+  "name": "instant-messnger",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:worker": "wrangler dev",
+    "build:site": "node site/build.mjs",
+    "dev:site": "node site/build.mjs --serve",
+    "typecheck": "tsc -p worker && tsc -p site",
+    "test": "vitest run",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261120.1",
+    "@types/ws": "^8.18.2",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.1",
+    "wrangler": "^4.166.0",
+    "ws": "^8.23.0"
+  }
+}

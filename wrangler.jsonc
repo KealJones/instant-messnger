@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "instant-messnger",
+  "main": "worker/src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "vars": {
+    "ALLOWED_ORIGINS": "https://kealjones.com"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "ROOM", "class_name": "Room" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  // Worker Previews (one per PR branch) get their own isolated rooms.
+  "previews": {
+    "vars": {
+      "ALLOWED_ORIGINS": "https://kealjones.com"
+    },
+    "durable_objects": {
+      "bindings": [{ "name": "ROOM", "class_name": "Room" }]
+    }
+  }
+}

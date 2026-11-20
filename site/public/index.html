@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Instant Mess'nger</title>
+    <meta name="description" content="Actually instant messaging. Everyone types at once, nothing is saved, you had to be there." />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="desktop">
+      <section class="win" id="signon" aria-labelledby="signon-title">
+        <header class="titlebar">
+          <span id="signon-title">Sign On</span>
+          <span class="winbtns" aria-hidden="true"><i>_</i><i>□</i><i>×</i></span>
+        </header>
+        <div class="winbody">
+          <h1 class="logo">Instant Mess<span class="apos">'</span>nger</h1>
+          <p class="tagline">Actually instant. Nothing saved. You had to be there.</p>
+          <form id="signon-form" class="form">
+            <label>Screen name
+              <input id="name" maxlength="24" required autocomplete="nickname" autocapitalize="off" spellcheck="false" />
+            </label>
+            <label>Room
+              <input id="room" maxlength="40" required autocapitalize="off" spellcheck="false" />
+            </label>
+            <button type="submit" class="btn">Sign On</button>
+          </form>
+          <details class="rules">
+            <summary>How this works</summary>
+            <ul>
+              <li>Everyone in the room types into one shared line. Letters land in the order they arrive.</li>
+              <li>Each letter you type earns you one backspace. A backspace crosses out the newest letter in the line, whoever typed it.</li>
+              <li>After 5 seconds of nobody typing, the line locks. The next keystroke wipes it and starts a new one. Backspaces reset.</li>
+              <li>Nothing is stored. If you weren't here, you missed it.</li>
+            </ul>
+          </details>
+        </div>
+      </section>
+
+      <section class="win chatwin" id="chat" hidden aria-labelledby="title">
+        <header class="titlebar">
+          <span id="title">Instant Mess'nger</span>
+          <span class="winbtns" aria-hidden="true"><i>_</i><i>□</i><i>×</i></span>
+        </header>
+        <nav class="toolbar">
+          <button type="button" class="btn" id="invite">Invite</button>
+          <button type="button" class="btn" id="signoff">Sign Off</button>
+        </nav>
+        <div class="panes">
+          <aside class="buddies">
+            <h2>Buddies <span id="count"></span></h2>
+            <ul id="buddies"></ul>
+          </aside>
+          <div class="talk">
+            <div class="who" id="who">Nobody's talking</div>
+            <div class="braid empty" id="braid"></div>
+            <input
+              id="type"
+              class="type"
+              aria-label="Type here. Everyone sees it as you go."
+              placeholder="Type. Everyone sees it as you go."
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+              enterkeyhint="send"
+            />
+          </div>
+        </div>
+        <footer class="statusbar" id="status" role="status">Dialing in…</footer>
+      </section>
+    </main>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
