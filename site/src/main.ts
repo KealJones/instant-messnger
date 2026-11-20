@@ -85,7 +85,8 @@ let me = "";
 const people = new Map<string, { name: string; left: number }>();
 let braidId: number | null = null;
 let letters: Letter[] = [];
-let pending = "";
+let pending = ""; // typed, not sent yet
+let inflight: { text: string; at: number }[] = []; // sent, waiting for the relay's copy
 let composing = false;
 let flushTimer: number | undefined;
 let lockTimer: number | undefined;
@@ -189,6 +190,7 @@ function connect() {
     if (ws !== sock) return;
     ws = null;
     setConnected(false);
+    inflight = [];
     people.clear();
     renderPeople();
     const wait = Math.min(10_000, 500 * 2 ** retry++);
@@ -223,6 +225,7 @@ function handle(m: ServerMsg) {
     }
     case "burst":
     case "del": {
+      if (m.t === "burst" && m.from === me) inflight.shift();
       if (m.braid !== braidId) {
         braidId = m.braid;
         letters = [];
@@ -338,6 +341,7 @@ function backspace() {
 function flush() {
   clearTimeout(flushTimer);
   if (!pending) return;
+  if (ws?.readyState === WebSocket.OPEN) inflight.push({ text: pending, at: Date.now() });
   send({ t: "burst", text: pending });
   pending = "";
   renderText();
@@ -362,9 +366,12 @@ function renderText() {
       frag.append(d);
     }
   }
-  if (pending) frag.append(node("span", pending, `c${colorOf(me)} pending`));
+  // what you typed stays put, full color, until the relay's copy takes its place (no flicker)
+  inflight = inflight.filter((b) => Date.now() - b.at < 3000);
+  const mine = inflight.map((b) => b.text).join("") + pending;
+  if (mine) frag.append(node("span", mine, `c${colorOf(me)}`));
   textEl.replaceChildren(frag);
-  bubble.classList.toggle("empty", letters.length === 0 && !pending);
+  bubble.classList.toggle("empty", letters.length === 0 && !mine);
   bubble.scrollTop = bubble.scrollHeight;
 }
 
