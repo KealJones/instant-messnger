@@ -143,7 +143,7 @@ function enter() {
   joinView.hidden = true;
   app.hidden = false;
   connect();
-  focusTyping();
+  if (hasKeyboard) focusTyping();
 }
 
 joinForm.addEventListener("submit", (e) => {
@@ -272,17 +272,13 @@ function focusTyping() {
   if (document.activeElement !== typeEl) typeEl.focus({ preventScroll: true });
   if (!composing) resetCapture();
 }
+// Only grab focus on load where there's a real keyboard. On phones, focusing from code
+// "focuses" without showing the keyboard, so we wait for an actual tap instead.
+const hasKeyboard = matchMedia("(hover: hover) and (pointer: fine)").matches;
 
-const isControl = (target: EventTarget | null) => !!(target as HTMLElement | null)?.closest("button");
-app.addEventListener("pointerdown", (e) => {
-  if (isControl(e.target)) return;
-  e.preventDefault(); // keep the hidden input focused
-  focusTyping();
-});
-app.addEventListener("click", (e) => {
-  // iOS only opens the keyboard from a click/tap handler
-  if (!isControl(e.target) && document.activeElement !== typeEl) focusTyping();
-});
+// Keep the caret after the sentinel so backspace always has something to delete.
+for (const ev of ["focus", "pointerup"]) typeEl.addEventListener(ev, () => !composing && resetCapture());
+
 document.addEventListener("keydown", (e) => {
   if (app.hidden || document.activeElement === typeEl || e.metaKey || e.ctrlKey || e.altKey) return;
   if (document.activeElement?.closest("button") && (e.key === "Enter" || e.key === " ")) return;
@@ -308,7 +304,9 @@ typeEl.addEventListener("input", (e) => {
 function readCapture() {
   const v = typeEl.value;
   const added = v.split(S).join("");
-  if (!v.includes(S)) backspace();
+  // Missing sentinel with nothing typed = backspace. (Android keyboards sometimes swallow the
+  // sentinel while committing a word; that's not a backspace.)
+  if (!v.includes(S) && added === "") backspace();
   const n = graphemes(added).length;
   if (n > 1) {
     // pasted, autocorrected or composed: send it as one burst

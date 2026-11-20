@@ -204,20 +204,26 @@ del {
 .people .me { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
 .people .left { font-size: 12px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-/* hidden input that catches the keyboard (needed for phones and IMEs) */
+/* Invisible text field covering the whole screen: any tap is a real tap on a real input,
+   which is the only thing iOS reliably opens the keyboard for. */
 .capture {
   position: fixed;
-  left: 50%;
-  top: 50%;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  font-size: 16px; /* keeps iOS from zooming */
-  border: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  margin: 0;
   padding: 0;
+  border: 0;
+  opacity: 0;
+  color: transparent;
+  background: transparent;
   caret-color: transparent;
-  pointer-events: none;
+  font-size: 16px; /* keeps iOS from zooming */
+  cursor: text;
+  -webkit-tap-highlight-color: transparent;
 }
+.top, .bottom { position: relative; z-index: 2; }
 
 .c0 { color: var(--c0); }
 .c1 { color: var(--c1); }
