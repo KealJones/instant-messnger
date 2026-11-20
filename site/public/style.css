@@ -135,7 +135,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .stage {
   display: flex;
   flex-direction: column;
-  align-items: flex-start; /* bubble grows rightward only, like a chat bubble */
+  align-items: center;
   justify-content: center;
   width: min(760px, 100%);
   margin: 0 auto;
